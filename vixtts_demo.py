@@ -17,7 +17,10 @@ import torchaudio
 from huggingface_hub import hf_hub_download, snapshot_download
 from underthesea import sent_tokenize
 from unidecode import unidecode
-from vinorm import TTSnorm
+try:
+    from vinorm import TTSnorm  # Linux-only (bundles an x86-64 ELF binary)
+except Exception:
+    from vi_normalizer import TTSnorm  # pure-Python fallback for macOS
 
 from TTS.tts.configs.xtts_config import XttsConfig
 from TTS.tts.models.xtts import Xtts
@@ -30,9 +33,25 @@ FILTER_SUFFIX = "_DeepFilterNet3.wav"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
+def get_device():
+    """Pick the inference device. Override with VIXTTS_DEVICE=cpu|mps|cuda."""
+    forced = os.environ.get("VIXTTS_DEVICE")
+    if forced:
+        return forced
+    if torch.cuda.is_available():
+        return "cuda"
+    # XTTS is unreliable on Apple MPS, so default to CPU on macOS.
+    return "cpu"
+
+
+DEVICE = get_device()
+
+
 def clear_gpu_cache():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    elif DEVICE == "mps":
+        torch.mps.empty_cache()
 
 
 def load_model(checkpoint_dir="model/", repo_id="capleaf/viXTTS", use_deepspeed=False):
@@ -62,10 +81,11 @@ def load_model(checkpoint_dir="model/", repo_id="capleaf/viXTTS", use_deepspeed=
     XTTS_MODEL = Xtts.init_from_config(config)
     yield "Loading model..."
     XTTS_MODEL.load_checkpoint(
-        config, checkpoint_dir=checkpoint_dir, use_deepspeed=use_deepspeed
+        config,
+        checkpoint_dir=checkpoint_dir,
+        use_deepspeed=use_deepspeed and DEVICE == "cuda",
     )
-    if torch.cuda.is_available():
-        XTTS_MODEL.cuda()
+    XTTS_MODEL.to(DEVICE)
 
     print("Model Loaded!")
     yield "Model Loaded!"
@@ -311,7 +331,7 @@ if __name__ == "__main__":
 
     REFERENCE_AUDIO = os.path.join(SCRIPT_DIR, "assets", "vixtts_sample_female.wav")
     if args.reference_audio:
-        REFERENCE_AUDIO = os.abspath(args.reference_audio)
+        REFERENCE_AUDIO = os.path.abspath(args.reference_audio)
 
     with gr.Blocks() as demo:
         intro = """
@@ -331,7 +351,9 @@ if __name__ == "__main__":
                 )
 
                 use_deepspeed = gr.Checkbox(
-                    value=True, label="Use DeepSpeed for faster inference"
+                    value=DEVICE == "cuda",
+                    interactive=DEVICE == "cuda",
+                    label="Use DeepSpeed for faster inference (Nvidia GPU only)"
                 )
 
                 progress_load = gr.Label(label="Progress:")
@@ -408,4 +430,11 @@ if __name__ == "__main__":
             outputs=[progress_gen, tts_output_audio],
         )
 
-    demo.launch(share=True, debug=False, server_port=args.port, server_name="0.0.0.0")
+    share = os.environ.get("VIXTTS_SHARE") == "1"
+    demo.launch(
+        share=share,
+        debug=False,
+        server_port=args.port,
+        server_name="127.0.0.1",
+        inbrowser=True,
+    )

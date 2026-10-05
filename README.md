@@ -17,6 +17,33 @@ The model can be accessed at: [viXTTS on Hugging Face](https://huggingface.co/ca
 Tutorial (Vietnamese): <https://youtu.be/pbwEbpOy0m8?feature=shared>
 ![viXTTS Colab Demo](assets/vixtts_colab.png)
 
+## macOS Usage 🍎
+
+This fork adds macOS support (Apple Silicon and Intel).
+
+```bash
+git clone --recurse-submodules -b macos https://github.com/nguyenvantrai2011/vixtts-demo
+cd vixtts-demo
+./run_mac.sh        # web UI at http://127.0.0.1:5003 (local only, no public link)
+```
+
+Command line (useful for automated pipelines):
+
+```bash
+./run_mac.sh cli --text script.txt --voice my_voice.wav --out audio.wav --timings timings.json
+```
+
+`timings.json` contains the start/end time of each sentence, ready for subtitles.
+
+What changed vs. the Linux version:
+
+- `run_mac.sh` installs Python 3.10 and ffmpeg via Homebrew instead of `apt`.
+- `deepspeed` is removed (Nvidia-only).
+- `vinorm` ships a Linux-only binary, so `vi_normalizer.py` replaces it with a pure-Python normalizer (numbers, decimals, %, dates, times, currency, units, abbreviations).
+- Inference runs on CPU. Apple GPU (MPS) does not work: XTTS uses a convolution with more than 65536 output channels, which MPS does not support. On an M1 Pro, synthesis takes about 1.7x the audio length (a 5-minute script takes about 8-9 minutes).
+- `constraints-mac.txt` pins known-good versions: TTS 0.22 breaks with torch>=2.6, transformers>=4.50, and gradio 4.25 breaks with newer fastapi/huggingface_hub.
+- The web UI binds to `127.0.0.1` and does not create a public Gradio share link (set `VIXTTS_SHARE=1` to opt in).
+
 ## Local Usage
 
 This code is specifically designed for running on Ubuntu or WSL2. It is not intended for use on macOS or Windows systems.

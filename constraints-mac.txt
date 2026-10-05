@@ -1,0 +1,11 @@
+# Known-good versions for TTS 0.22 (XTTS) on macOS.
+torch==2.5.1               # >=2.6 changes torch.load(weights_only) default
+torchaudio==2.5.1          # >=2.9 moves load/save to torchcodec
+numpy==1.26.4
+transformers==4.46.3       # >=4.50 drops GPT2 generate() used by XTTS
+huggingface_hub==0.25.2    # gradio 4.25 needs HfFolder (removed in 1.0)
+tokenizers==0.20.3
+networkx==2.8.8            # gruut requires <3
+fastapi==0.110.3           # gradio 4.25 breaks on newer fastapi/starlette
+starlette==0.37.2
+pydantic==2.10.6
